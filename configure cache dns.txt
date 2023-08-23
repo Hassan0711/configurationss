@@ -1,0 +1,83 @@
+// 1.Setup Caching-Only DNS Server using BIND9 on Ubuntu 20.04
+//2. Rename the hostname to match candidates "Firstname"
+//3. Secure your server as per best practice and ensure you can browse through your newly configured name server
+
+
+apt update
+
+apt install bind9 bind9utils -y   //install bind9//
+less /etc/bind/named.conf  //Setup Caching-Only DNS Server using BIND9 on Ubuntu 20.04//
+cp /etc/bind/named.conf.options{,.bak}  //Create a backup of the default options configuration file//
+vim /etc/bind/named.conf.options  //open the options configuration file for editing//
+
+//Configure Access Control List//
+/*begin with, configure DNS server access control list*/
+
+// DNS Server ACL
+acl "allowed" {
+        192.168.57.0/24;
+};
+
+#Define global server configuration options
+...
+options {
+        directory "/var/cache/bind";
+
+        recursion yes;
+        allow-recursion { localhost; allowed; };
+        listen-on port 53 { localhost; 192.168.57.6; };
+        allow-query { localhost; allowed; };
+        allow-transfer { none; };
+        
+        dnssec-validation auto;
+
+//**For our basic caching-only DNS server, here is how our /etc/bind/named.conf.options looks like**//
+
+acl "allowed" {
+        192.168.57.0/24;
+};
+options {
+        directory "/var/cache/bind";
+
+        recursion yes;
+        allow-recursion { localhost; allowed; };
+        listen-on port 53 { localhost; 192.168.57.6; };
+        allow-query { localhost; allowed; };
+        allow-transfer { none; };
+        
+        dnssec-validation auto;
+
+        listen-on-v6 { none; };
+};
+
+
+named-checkconf         #Checking Bind Configuration Syntax
+
+#Open DNS Port on Firewall
+ufw allow from 192.168.57.0/24 to 192.168.57.6 port 53 proto udp
+ufw status numbered
+[ 2] 192.168.57.6 53/udp        ALLOW IN    192.168.57.0/24
+
+#Controlling Bind Service
+systemctl enable --now named    # starting service
+systemctl status named          #checking service status 
+
+#check the DNS port
+netstat -alunp | grep 53
+
+#Testing BIND DNS Resolution on client
+nmcli -t --fields NAME con show --active     #find an active connection name
+nmcli --fields ip4.dns con show 'Wired connection 1'   //Based on the currently active connection, find the DNS server IP address set//
+
+nmcli con mod 'Wired connection 1' ipv4.dns 192.168.57.6 #set or modify the DNS server IP address
+
+nmcli con down 'Wired connection 1' #Reload the interface
+nmcli con up 'Wired connection 1'
+
+nmcli --fields ip4.dns con show 'Wired connection 1' #Now check the DNS server IP
+//Also check if the /etc/resolv.conf file is updated with the same IP.
+
+//Verify the DNS resolution (Assuming you already have bind-utils package installed)
+
+dig google.com {Verify the DNS resolution}
+nslookup google.com
